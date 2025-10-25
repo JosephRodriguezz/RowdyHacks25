@@ -1,1 +1,13 @@
-These are the central list of all the external libraries and packages required for this project to run correctly.
+fastapi
+uvicorn[standard]
+streamlit
+torch
+torchvision
+mediapipe
+opencv-python
+numpy
+pytorch-grad-cam
+python-multipart
+requests
+ffmpeg-python
+scikit-image
