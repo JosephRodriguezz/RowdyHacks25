@@ -3,8 +3,7 @@ uvicorn[standard]
 streamlit
 torch
 torchvision
-mediapipe
-opencv-python
+opencv-contrib-python
 numpy
 pytorch-grad-cam
 python-multipart
