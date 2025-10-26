@@ -1,19 +1,6 @@
 import cv2, numpy as np, os, tempfile, subprocess, glob
 
-_MODEL_PATH = os.path.normpath(os.path.join(
-    os.path.dirname(__file__), "..", "..", "models",
-    "face_detection_yunet_2023mar.onnx"
-))
-
-detector = cv2.FaceDetectorYN.create(
-    model=_MODEL_PATH,
-    config="",
-    input_size=(320, 320),
-    score_threshold=0.6,
-    nms_threshold=0.3,
-    top_k=5000
-)
-
+# --- Frame extraction ---
 def extract_frames(tmp_video: str, fps: int = 3, max_frames: int = 90):
     out_dir = tempfile.mkdtemp()
     cmd = [
@@ -25,22 +12,38 @@ def extract_frames(tmp_video: str, fps: int = 3, max_frames: int = 90):
                    stderr=subprocess.DEVNULL, check=False)
     return sorted(glob.glob(os.path.join(out_dir, "f_*.jpg")))[:max_frames]
 
-def face_crops(frame_path: str, out_size: int = 112):
+# --- SSD detector (Caffe model) ---
+_MODEL_DIR = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", "models"))
+_SSD_PROTO = os.path.join(_MODEL_DIR, "deploy.prototxt")
+_SSD_MODEL = os.path.join(_MODEL_DIR, "res10_300x300_ssd_iter_140000.caffemodel")
+
+if not (os.path.exists(_SSD_PROTO) and os.path.exists(_SSD_MODEL)):
+    raise FileNotFoundError(
+        "OpenCV SSD face model missing. Download deploy.prototxt and "
+        "res10_300x300_ssd_iter_140000.caffemodel into models/."
+    )
+
+_net = cv2.dnn.readNetFromCaffe(_SSD_PROTO, _SSD_MODEL)
+
+def face_crops(frame_path: str, out_size: int = 112, conf_thresh: float = 0.6):
     img = cv2.imread(frame_path)
     if img is None:
         return []
     h, w = img.shape[:2]
-    detector.setInputSize((w, h))
-    ok, faces = detector.detect(img)
+    blob = cv2.dnn.blobFromImage(cv2.resize(img, (300, 300)), 1.0,
+                                 (300, 300), (104.0, 177.0, 123.0))
+    _net.setInput(blob)
+    detections = _net.forward()
+
     crops = []
-    if ok and faces is not None:
-        for f in faces:
-            x, y, ww, hh = f[:4].astype(int)
-            x, y = max(0, x), max(0, y)
-            ww, hh = min(w - x, ww), min(h - y, hh)
-            if ww <= 0 or hh <= 0:
-                continue
-            crop = cv2.resize(img[y:y+hh, x:x+ww],
-                              (out_size, out_size))
-            crops.append(crop[:, :, ::-1])  # BGR→RGB
+    for i in range(detections.shape[2]):
+        conf = float(detections[0, 0, i, 2])
+        if conf < conf_thresh:
+            continue
+        x1, y1, x2, y2 = (detections[0, 0, i, 3:7] * np.array([w, h, w, h])).astype(int)
+        x1, y1 = max(0, x1), max(0, y1)
+        x2, y2 = min(w, x2), min(h, y2)
+        if x2 > x1 and y2 > y1:
+            crop = cv2.resize(img[y1:y2, x1:x2], (out_size, out_size))
+            crops.append(cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)) # contigous RGB
     return crops

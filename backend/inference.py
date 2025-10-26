@@ -4,7 +4,7 @@ from torchvision.models import resnet18, ResNet18_Weights
 from explain.cam import GradCAM, overlay_cam_on_image, encode_jpg_base64
 
 _device = "cpu"
-_model = resnet18(weights=ResNet18_Weights.DEFAULT).to(_device).eval()
+_model = resnet18(weights=None).to(_device).eval()
 _target_layer = _model.layer4[-1].conv2
 
 _pre = transforms.Compose([

@@ -32,11 +32,13 @@ async def debug_cam(file: UploadFile = File(...)):
             })
 
     video_score = float(np.mean(scores)) if scores else 0.5
-    return {"video_score": video_score,
-            "explanations": explanations,
-            "frames_checked": len(frames)}
+    return {
+        "video_score": video_score,
+        "explanations": explanations,
+        "frames_checked": len(frames)
+    }
 
-# Alias so clients can POST to /score if needed
+# Alias for compatibility
 @app.post("/score")
 async def score_alias(file: UploadFile = File(...)):
     return await debug_cam(file)
