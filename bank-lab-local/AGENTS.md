@@ -67,6 +67,8 @@ Start with Red Scout/Operator and Blue Monitor/Defender responsibilities. Expand
 
   Reset clears bank state/events and invalidates sessions. Preserve needed evidence and stop actions before reset. Do not expose operator commands, database credentials, or event storage to Red. The baseline has no deliberate vulnerabilities and no integrated referee.
 - Local Docker Desktop setup is documented in [the Windows walkthrough](docs/LOCAL_DOCKER_DESKTOP.md). The bank app and database stay on internal networks; only the fixed Nginx proxy publishes `127.0.0.1:3000`. Do not replace this with a public or general-egress app network for vulnerability experiments.
+- The opt-in SQL injection exercise is documented in the local Docker Desktop walkthrough. Set `BANK_SCENARIO=sqli-training`, provision its distinct `BANK_TRAINING_DB_PASSWORD` with the operator reset, then demonstrate only `GET /api/training/search?term=...` on `http://127.0.0.1:3000`. The demo role is read-only and limited to synthetic `bank.training_records`; run the baseline operator verification afterward. Turn it off with `BANK_SCENARIO=baseline` and recreate the local stack. Do not expose the scenario publicly.
+- The local `/monitor` page displays sanitized API request metadata from a 250-entry in-memory ring buffer. It is not packet capture, excludes its own polling requests, and omits bodies, cookies, query strings, and source addresses. For visible activity, use the walkthrough's local 20-request/one-per-second demonstration; do not use a distributed flood.
 - Git changes are manual by default. Do not commit, create branches, push, merge, or stash unless Joseph explicitly asks.
 
 ## Workflow skills

@@ -59,7 +59,7 @@ export default function Bank() {
   }
   return <div className="shell">
     <header className="topbar"><a className="brand" href="/" aria-label="Rowdy Bank home"><Image className="brand-mark" src="/utsa-roadrunner.png" alt="" width={58} height={58} priority /> <span>Rowdy Bank</span></a>
-      <div className="header-right"><span className="lab-tag">Synthetic bank</span><span className="health"><i />{health}</span></div>
+      <div className="header-right"><a className="monitor-nav" href="/monitor">Live monitor ↗</a><span className="lab-tag">Synthetic bank</span><span className="health"><i />{health}</span></div>
     </header>
     {!user ? <main className="welcome">
       <section className="intro"><p className="eyebrow">ROWDYHACKS SECURITY LAB</p><h1>Banking meets<br />security practice.</h1>

@@ -58,6 +58,12 @@ sudo docker compose --env-file .env.bank-lab -f compose.bank-lab.yaml run --rm o
 
 The Nginx proxy binds to `127.0.0.1:3000`; PostgreSQL and the bank app have no published ports. The bank and database remain on internal Docker networks with no general Internet route from the bank app. On Ubuntu, use the walkthrough's SSH tunnel to reach the local proxy. Reset invalidates existing sessions, restores synthetic balances, rotates the bank run ID and vault record, and clears raw events. Preserve any events needed for evaluation before resetting.
 
+An opt-in SQL injection training variant is available only in the local Docker Desktop walkthrough. Its intentionally unsafe search runs with a dedicated role that can read only synthetic training fixtures; it does not weaken login, account ownership, or vault authorization. Keep the scenario on the local loopback-bound copy.
+
+To demonstrate it, set `BANK_SCENARIO=sqli-training` and a unique `BANK_TRAINING_DB_PASSWORD` in the private `.env.bank-lab`, recreate the local stack and run the operator reset and baseline verification commands from the walkthrough. Then query `http://127.0.0.1:3000/api/training/search?term=identity` and compare it with a URL-encoded `term=' OR TRUE --`. Return to `BANK_SCENARIO=baseline` and recreate the stack to disable the route. Reset clears bank state/events and invalidates sessions; preserve needed evidence first.
+
+The separate local request monitor is available at `http://127.0.0.1:3000/monitor`. It shows sanitized API method, route, status, and latency from a bounded in-memory buffer. It does not capture packets or request contents; see the Docker Desktop walkthrough for a low-rate 20-request display exercise.
+
 Local source checks with Node.js 24 and pnpm 11.19.0:
 
 ```sh

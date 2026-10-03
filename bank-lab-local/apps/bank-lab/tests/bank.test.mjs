@@ -4,6 +4,8 @@ import {randomBytes} from 'node:crypto';
 import {PGlite} from '@electric-sql/pglite';
 import {login, logout, read, resetDatabase, state} from '../src/lib/bank.mjs';
 import {provisionAppRole, validateDatabasePasswords} from '../src/lib/setup.mjs';
+import {provisionTrainingRole} from '../src/lib/setup.mjs';
+import {searchTrainingRecords, trainingSearchSql} from '../src/lib/training-search.mjs';
 
 let db;
 let engine;
@@ -67,13 +69,36 @@ test('failed reset configuration preserves the existing baseline', async () => {
   assert.equal((await state(db)).run_id, old.run_id);
 });
 
-test('operator rejects shared administrator and web database credentials', () => {
+test('operator rejects shared administrator, web, and training database credentials', () => {
   const admin = randomBytes(32).toString('hex');
   const app = randomBytes(32).toString('hex');
+  const training = randomBytes(32).toString('hex');
   const url = `postgresql://lab_admin:${admin}@db:5432/bank_lab`;
-  assert.doesNotThrow(() => validateDatabasePasswords(url, app));
-  assert.throws(() => validateDatabasePasswords(url, admin));
-  assert.throws(() => validateDatabasePasswords(url, 'replace_with_password'));
+  assert.doesNotThrow(() => validateDatabasePasswords(url, app, training));
+  assert.throws(() => validateDatabasePasswords(url, admin, training));
+  assert.throws(() => validateDatabasePasswords(url, app, app));
+  assert.throws(() => validateDatabasePasswords(url, app, 'replace_with_password'));
+});
+
+test('training search demonstrates injection only against read-only synthetic records', async () => {
+  const trainingPassword = randomBytes(32).toString('hex');
+  await provisionTrainingRole(db, trainingPassword);
+  await db.query('SET ROLE bank_training');
+  await db.query('BEGIN READ ONLY');
+  const ordinary = await searchTrainingRecords(db, 'identity');
+  assert.deepEqual(ordinary.map(row => row.record_id), ['guide-2']);
+  const injected = await searchTrainingRecords(db, "' OR TRUE --");
+  assert.deepEqual(injected.map(row => row.record_id).sort(), ['guide-1', 'guide-2', 'guide-3']);
+  await db.query('SAVEPOINT denied_cross_table_read');
+  await assert.rejects(db.query('SELECT username FROM bank.users'), /permission denied/);
+  await db.query('ROLLBACK TO SAVEPOINT denied_cross_table_read');
+  await db.query('SAVEPOINT denied_fixture_write');
+  await assert.rejects(db.query("UPDATE bank.training_records SET label = 'changed'"), /read-only transaction/);
+  await db.query('ROLLBACK TO SAVEPOINT denied_fixture_write');
+  await db.query('ROLLBACK');
+  await db.query('RESET ROLE');
+  assert.match(trainingSearchSql('identity'), /ILIKE '%identity%'/);
+  assert.throws(() => trainingSearchSql('x'.repeat(65)), RangeError);
 });
 
 test('telemetry contains safe categories instead of credentials or vault contents', async () => {
@@ -97,4 +122,5 @@ test('web database role cannot reset, mutate balances, or read the operator even
   await assert.rejects(db.query('TRUNCATE bank.users CASCADE'), /permission denied/);
   await assert.rejects(db.query('UPDATE bank.accounts SET balance_cents = 0'), /permission denied/);
   await assert.rejects(db.query('SELECT * FROM bank.events'), /permission denied/);
+  await assert.rejects(db.query('SELECT * FROM bank.training_records'), /permission denied/);
 });

@@ -90,7 +90,7 @@ export async function read(db, resource, token, accountId) {
 }
 
 export async function resetDatabase(db, config) {
-  const {customerPassword, vaultPassword} = config;
+  const {customerPassword, vaultPassword, scenarioVersion = 'baseline-v1'} = config;
   if (typeof customerPassword !== 'string' || typeof vaultPassword !== 'string' ||
       customerPassword.length < 16 || vaultPassword.length < 16 ||
       customerPassword.length > 256 || vaultPassword.length > 256 ||
@@ -111,15 +111,17 @@ export async function resetDatabase(db, config) {
       expires_at timestamptz NOT NULL);
     CREATE TABLE IF NOT EXISTS bank.vault (
       vault_id text PRIMARY KEY, label text NOT NULL, synthetic_record text NOT NULL);
+    CREATE TABLE IF NOT EXISTS bank.training_records (
+      record_id text PRIMARY KEY, label text NOT NULL);
     CREATE TABLE IF NOT EXISTS bank.events (
       sequence bigserial PRIMARY KEY, event_id uuid UNIQUE NOT NULL, run_id uuid NOT NULL,
       occurred_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP, target_id text NOT NULL,
       event_type text NOT NULL, actor_id text NOT NULL, visibility text NOT NULL, summary text NOT NULL,
       producer text NOT NULL DEFAULT 'lab' CHECK(producer = 'lab'),
       source_mode text NOT NULL DEFAULT 'live' CHECK(source_mode = 'live'));
-    TRUNCATE bank.sessions, bank.accounts, bank.users, bank.vault, bank.events, bank.state RESTART IDENTITY;`);
+    TRUNCATE bank.sessions, bank.accounts, bank.users, bank.vault, bank.training_records, bank.events, bank.state RESTART IDENTITY;`);
   const runId = randomUUID();
-  await db.query("INSERT INTO bank.state VALUES (TRUE, $1, 'baseline-v1')", [runId]);
+  await db.query('INSERT INTO bank.state VALUES (TRUE, $1, $2)', [runId, scenarioVersion]);
   for (const [id, username, name, role, password] of [
     ['user-customer', 'customer', 'Lab Customer', 'customer', customerPassword],
     ['user-vault', 'vault', 'Vault Custodian', 'vault', vaultPassword],
@@ -133,5 +135,9 @@ export async function resetDatabase(db, config) {
     ('2001', 'user-vault', 'Custodian account', 800000)`);
   await db.query('INSERT INTO bank.vault VALUES ($1, $2, $3)',
     ['vault-main', 'Synthetic vault ledger', `LAB-ONLY-${randomBytes(16).toString('hex')}`]);
+  await db.query(`INSERT INTO bank.training_records VALUES
+    ('guide-1', 'Training guide: recognize unusual account activity'),
+    ('guide-2', 'Training guide: verify a customer identity'),
+    ('guide-3', 'Training guide: report a suspicious transfer')`);
   return runId;
 }

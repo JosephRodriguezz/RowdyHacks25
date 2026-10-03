@@ -1,6 +1,7 @@
 import {NextRequest, NextResponse} from 'next/server';
-import {transaction} from '../../../lib/database.mjs';
+import {transaction, searchTrainingRecords} from '../../../lib/database.mjs';
 import {state, targetId, login, logout, read} from '../../../lib/bank.mjs';
+import {readHttpRequests, recordHttpRequest} from '../../../lib/live-logs.mjs';
 import {allowedOrigin, boundedJson} from '../../../lib/request-policy.mjs';
 
 export const runtime = 'nodejs';
@@ -10,7 +11,7 @@ const headers = {'Cache-Control': 'no-store'};
 type Context = {params: Promise<{path: string[]}>};
 type ActionResult = {status: number; body: Record<string, unknown>; token?: string; maxAge?: number};
 
-export async function GET(request: NextRequest, context: Context) {
+async function handleGet(request: NextRequest, context: Context) {
   const {path} = await context.params;
   const route = path.join('/');
   if (route === 'health') {
@@ -19,6 +20,24 @@ export async function GET(request: NextRequest, context: Context) {
       return NextResponse.json({status: 'ready', target_id: targetId, ...current}, {headers});
     } catch {
       return NextResponse.json({status: 'unavailable', target_id: targetId}, {status: 503, headers});
+    }
+  }
+  if (route === 'monitor/logs') {
+    const afterValue = request.nextUrl.searchParams.get('after') ?? '0';
+    const after = /^\d{1,16}$/.test(afterValue) ? Number(afterValue) : 0;
+    return NextResponse.json(readHttpRequests(after), {headers});
+  }
+  if (route === 'training/search') {
+    if (process.env.BANK_SCENARIO !== 'sqli-training') {
+      return NextResponse.json({error: 'Route not found'}, {status: 404, headers});
+    }
+    const term = request.nextUrl.searchParams.get('term') ?? '';
+    if (term.length > 64) return NextResponse.json({error: 'Search term too long'}, {status: 400, headers});
+    try {
+      const records = await searchTrainingRecords(term);
+      return NextResponse.json({records}, {headers});
+    } catch {
+      return NextResponse.json({error: 'Training search temporarily unavailable'}, {status: 503, headers});
     }
   }
   const allowed = ['me', 'accounts', 'vault'].includes(route) ||
@@ -32,7 +51,23 @@ export async function GET(request: NextRequest, context: Context) {
   }
 }
 
-export async function POST(request: NextRequest, context: Context) {
+export async function GET(request: NextRequest, context: Context) {
+  const started = performance.now();
+  const {path} = await context.params;
+  const route = path.join('/');
+  let status = 500;
+  try {
+    const response = await handleGet(request, context);
+    status = response.status;
+    return response;
+  } finally {
+    if (route !== 'monitor/logs') {
+      recordHttpRequest({method: 'GET', route, status, durationMs: performance.now() - started});
+    }
+  }
+}
+
+async function handlePost(request: NextRequest, context: Context) {
   const {path} = await context.params;
   if (path.length !== 1 || !['login', 'logout'].includes(path[0])) {
     return NextResponse.json({error: 'Route not found'}, {status: 404, headers});
@@ -67,5 +102,19 @@ export async function POST(request: NextRequest, context: Context) {
     return response;
   } catch {
     return NextResponse.json({error: 'Bank temporarily unavailable'}, {status: 503, headers});
+  }
+}
+
+export async function POST(request: NextRequest, context: Context) {
+  const started = performance.now();
+  const {path} = await context.params;
+  const route = path.join('/');
+  let status = 500;
+  try {
+    const response = await handlePost(request, context);
+    status = response.status;
+    return response;
+  } finally {
+    recordHttpRequest({method: 'POST', route, status, durationMs: performance.now() - started});
   }
 }

@@ -22,6 +22,8 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://bank_app:${BANK_APP_DB_PASSWORD:?Set BANK_APP_DB_PASSWORD}@db:5432/bank_lab
+      TRAINING_DATABASE_URL: postgresql://bank_training:${BANK_TRAINING_DB_PASSWORD:?Set BANK_TRAINING_DB_PASSWORD}@db:5432/bank_lab
+      BANK_SCENARIO: ${BANK_SCENARIO:-baseline}
       BANK_COOKIE_SECURE: "0"
       BANK_TARGET_ID: bank-lab
       BANK_ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000,http://bank:3000
@@ -56,6 +58,8 @@ services:
     environment:
       DATABASE_ADMIN_URL: postgresql://lab_admin:${BANK_DB_PASSWORD:?Set BANK_DB_PASSWORD}@db:5432/bank_lab
       BANK_APP_DB_PASSWORD: ${BANK_APP_DB_PASSWORD:?Set BANK_APP_DB_PASSWORD}
+      BANK_TRAINING_DB_PASSWORD: ${BANK_TRAINING_DB_PASSWORD:?Set BANK_TRAINING_DB_PASSWORD}
+      BANK_SCENARIO: ${BANK_SCENARIO:-baseline}
       BANK_CUSTOMER_PASSWORD: ${BANK_CUSTOMER_PASSWORD:?Set BANK_CUSTOMER_PASSWORD}
       BANK_VAULT_PASSWORD: ${BANK_VAULT_PASSWORD:?Set BANK_VAULT_PASSWORD}
     command: [node, scripts/verify.mjs, http://bank:3000]

@@ -52,3 +52,45 @@ Stop the local containers, preserving their local database volume, with:
 ```powershell
 docker compose --env-file .env.bank-lab -f compose.bank-lab.yaml down
 ```
+
+## Optional SQL injection training scenario
+
+This opt-in scenario is for the local Docker Desktop copy only. It exposes `GET /api/training/search?term=...` over three synthetic training records. The intentionally unsafe search uses a separate `bank_training` role that can read only `bank.training_records`, and the request runs in a read-only transaction. Login, account ownership, and vault authorization continue to use the baseline code path.
+
+1. In `.env.bank-lab`, add a third unique 64-character hexadecimal password for `BANK_TRAINING_DB_PASSWORD`, and set `BANK_SCENARIO=sqli-training`. Keep all passwords private. Generate a value in PowerShell with `[Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32)).ToLower()`.
+2. Recreate the local stack so the bank receives its dedicated training connection setting:
+
+   ```powershell
+   docker compose --env-file .env.bank-lab -f compose.bank-lab.yaml up --build -d --force-recreate
+   ```
+
+3. Initialize the fixture and role, then verify the normal bank baseline:
+
+   ```powershell
+   docker compose --env-file .env.bank-lab -f compose.bank-lab.yaml run --rm operator node scripts/reset.mjs
+   docker compose --env-file .env.bank-lab -f compose.bank-lab.yaml run --rm operator node scripts/verify.mjs http://bank:3000
+   ```
+
+   Reset rotates the run, clears bank events, restores synthetic data, and invalidates existing sessions. Preserve any needed evidence first.
+4. In PowerShell, show a normal search and then the bounded injection demonstration:
+
+   ```powershell
+   curl.exe --get --data-urlencode "term=identity" http://127.0.0.1:3000/api/training/search
+   curl.exe --get --data-urlencode "term=' OR TRUE --" http://127.0.0.1:3000/api/training/search
+   ```
+
+   The first returns one matching training record; the second returns the three fixture records. The endpoint is not an authenticated bank operation and does not expose a credential for the bank, accounts, vault, or event table.
+5. To turn the scenario off, set `BANK_SCENARIO=baseline` (or remove the setting), recreate the stack, then reset and verify the baseline. The route returns 404 while disabled. Do not publish this stack on a public interface or use it against a target outside this local lab.
+
+## Live request monitor
+
+Open [http://127.0.0.1:3000/monitor](http://127.0.0.1:3000/monitor) or use the `Live monitor` link in the bank header. The page polls a local in-memory ring buffer and displays API route, method, response status, and latency. It records neither raw packets nor source addresses, query strings, request bodies, cookies, or credentials. Logs are limited to the latest 250 requests and disappear when the bank process restarts. The monitor API excludes its own polling requests.
+
+To see a small, bounded local request stream, keep the monitor open in one tab and run this in PowerShell in another. This makes at most 20 requests, one per second; it is a display exercise, not a denial-of-service test:
+
+```powershell
+1..20 | ForEach-Object {
+  curl.exe --silent --output NUL --get --data-urlencode "term=identity" http://127.0.0.1:3000/api/training/search
+  Start-Sleep -Seconds 1
+}
+```

@@ -96,6 +96,8 @@ The isolated prototype in `apps/bank-lab` implements the following target interf
 | `GET /api/accounts` | Authenticated owner's synthetic accounts and run ID |
 | `GET /api/accounts/:account_id` | Four-digit identifier; owner check; cross-owner access denied |
 | `GET /api/vault` | Authenticated vault role only; synthetic protected records and run ID |
+| `GET /api/training/search?term=...` | Opt-in `sqli-training` scenario only; intentionally unsafe search over synthetic training rows via a separate read-only database role. It cannot access bank users, accounts, vault, sessions, or events. |
+| `GET /api/monitor/logs?after=...` | Returns a bounded cursor page of sanitized in-process HTTP API request metadata for the local monitor page. It excludes itself and never returns bodies, cookies, query strings, or source addresses. |
 | `node scripts/reset.mjs` in the operator service | Initializes/restores baseline, invalidates sessions, rotates run ID/record, and clears events; no public HTTP reset route |
 | `node scripts/verify.mjs http://bank:3000` in the operator service | Checks target readiness, authorized accounts/vault, unauthorized denial, and logout |
 
